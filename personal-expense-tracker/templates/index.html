@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Expense Tracker</title>
+
+  <!-- Chart.js loaded from CDN — gives us bar and line charts for free -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    /* ── Reset & base ──────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: #f0f2f5;
+      color: #1a1a2e;
+      min-height: 100vh;
+    }
+
+    /* ── Top navigation bar ─────────────────────────────────────── */
+    header {
+      background: #1a1a2e;
+      color: #fff;
+      padding: 0 2rem;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    header .logo {
+      font-size: 1.25rem;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+    }
+
+    header .subtitle {
+      font-size: 0.8rem;
+      color: #8892b0;
+      margin-top: 2px;
+    }
+
+    /* ── Main page wrapper ──────────────────────────────────────── */
+    main {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 2rem;
+    }
+
+    /* ── Section heading ────────────────────────────────────────── */
+    h2 {
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: #8892b0;
+      margin-bottom: 0.75rem;
+    }
+
+    /* ── Card (white rounded box) ───────────────────────────────── */
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 1.5rem;
+      border: 1px solid #e5e7eb;
+    }
+
+    /* ── Metric cards row ───────────────────────────────────────── */
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1rem;
+    }
+
+    .metric-card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 1.25rem 1.5rem;
+      border: 1px solid #e5e7eb;
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+
+    .metric-card .label {
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: #8892b0;
+    }
+
+    .metric-card .value {
+      font-size: 2rem;
+      font-weight: 800;
+      color: #1a1a2e;
+      line-height: 1;
+    }
+
+    .metric-card .value.rupee::before {
+      content: '₹';
+      font-size: 1.1rem;
+      font-weight: 600;
+      vertical-align: super;
+      margin-right: 2px;
+      color: #64748b;
+    }
+
+    /* ── Charts laid out side by side ──────────────────────────── */
+    .charts {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+
+    .chart-card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 1.5rem;
+      border: 1px solid #e5e7eb;
+    }
+
+    .chart-card canvas {
+      max-height: 260px;
+    }
+
+    /* ── Add expense form ────────────────────────────────────────── */
+    .form-grid {
+      display: grid;
+      grid-template-columns: 2fr 1fr 1fr 1fr auto;
+      gap: 0.75rem;
+      align-items: end;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+
+    label {
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    input, select {
+      padding: 0.55rem 0.75rem;
+      border: 1.5px solid #e5e7eb;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      color: #1a1a2e;
+      background: #f8fafc;
+      outline: none;
+      transition: border-color 0.15s;
+      width: 100%;
+    }
+
+    input:focus, select:focus {
+      border-color: #6366f1;
+      background: #fff;
+    }
+
+    /* ── Primary button ─────────────────────────────────────────── */
+    .btn-add {
+      background: #6366f1;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 0.55rem 1.25rem;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.15s;
+      height: 38px;           /* align with inputs */
+    }
+
+    .btn-add:hover { background: #4f46e5; }
+
+    /* ── Feedback message shown after adding ────────────────────── */
+    #form-msg {
+      font-size: 0.82rem;
+      margin-top: 0.5rem;
+      min-height: 1.2em;
+    }
+
+    #form-msg.ok  { color: #16a34a; }
+    #form-msg.err { color: #dc2626; }
+
+    /* ── Expense table ──────────────────────────────────────────── */
+    .table-wrap {
+      overflow-x: auto;        /* scroll on narrow screens */
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.88rem;
+    }
+
+    thead th {
+      text-align: left;
+      padding: 0.6rem 0.75rem;
+      background: #f8fafc;
+      color: #64748b;
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-bottom: 1.5px solid #e5e7eb;
+    }
+
+    tbody tr:hover { background: #f8fafc; }
+
+    tbody td {
+      padding: 0.7rem 0.75rem;
+      border-bottom: 1px solid #f0f2f5;
+      vertical-align: middle;
+    }
+
+    /* The amount column — right aligned and monospaced */
+    .col-amount {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+      font-weight: 600;
+    }
+
+    /* ── Category colour pills ──────────────────────────────────── */
+    .badge {
+      display: inline-block;
+      padding: 0.2rem 0.6rem;
+      border-radius: 999px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.3px;
+    }
+
+    /* One colour per category — background + matching text */
+    .badge-Food          { background: #fef9c3; color: #854d0e; }
+    .badge-Transport     { background: #dbeafe; color: #1e40af; }
+    .badge-Shopping      { background: #fce7f3; color: #9d174d; }
+    .badge-Bills         { background: #fee2e2; color: #991b1b; }
+    .badge-Entertainment { background: #ede9fe; color: #5b21b6; }
+    .badge-Other         { background: #e5e7eb; color: #374151; }
+
+    /* ── Delete button in table ─────────────────────────────────── */
+    .btn-del {
+      background: none;
+      border: 1.5px solid #e5e7eb;
+      color: #94a3b8;
+      border-radius: 6px;
+      padding: 0.25rem 0.55rem;
+      font-size: 0.75rem;
+      cursor: pointer;
+      transition: border-color 0.15s, color 0.15s;
+    }
+
+    .btn-del:hover {
+      border-color: #dc2626;
+      color: #dc2626;
+    }
+
+    /* Empty state shown when there are no expenses yet */
+    .empty-state {
+      text-align: center;
+      padding: 2.5rem;
+      color: #94a3b8;
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ── Header ─────────────────────────────────────────────────── -->
+  <header>
+    <div>
+      <div class="logo">Expense Tracker</div>
+      <div class="subtitle">Personal finance — all data saved locally</div>
+    </div>
+  </header>
+
+  <main>
+
+    <!-- ── Summary metric cards ─────────────────────────────────── -->
+    <section>
+      <h2>Overview</h2>
+      <div class="metrics">
+        <div class="metric-card">
+          <span class="label">Total Spent</span>
+          <span class="value rupee" id="stat-total">0.00</span>
+        </div>
+        <div class="metric-card">
+          <span class="label">Entries</span>
+          <span class="value" id="stat-count">0</span>
+        </div>
+        <div class="metric-card">
+          <span class="label">Top Category</span>
+          <span class="value" id="stat-top" style="font-size:1.3rem">—</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Charts ───────────────────────────────────────────────── -->
+    <div class="charts">
+      <div class="chart-card">
+        <h2>Spending by Category</h2>
+        <canvas id="barChart"></canvas>
+      </div>
+      <div class="chart-card">
+        <h2>Spending Over Time</h2>
+        <canvas id="lineChart"></canvas>
+      </div>
+    </div>
+
+    <!-- ── Add expense form ──────────────────────────────────────── -->
+    <section class="card">
+      <h2>Add Expense</h2>
+      <form id="expense-form" onsubmit="addExpense(event)">
+        <div class="form-grid">
+
+          <div class="form-group">
+            <label for="desc">Description</label>
+            <input id="desc" type="text" placeholder="e.g. Grocery run" required />
+          </div>
+
+          <div class="form-group">
+            <label for="amount">Amount (₹)</label>
+            <input id="amount" type="number" min="0.01" step="0.01" placeholder="0.00" required />
+          </div>
+
+          <div class="form-group">
+            <label for="category">Category</label>
+            <select id="category" required>
+              <option value="">Select…</option>
+              <option>Food</option>
+              <option>Transport</option>
+              <option>Shopping</option>
+              <option>Bills</option>
+              <option>Entertainment</option>
+              <option>Other</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="date">Date</label>
+            <!-- The date input is pre-filled with today's date via JS below -->
+            <input id="date" type="date" required />
+          </div>
+
+          <button class="btn-add" type="submit">+ Add</button>
+        </div>
+
+        <!-- Success / error message shown after submitting the form -->
+        <p id="form-msg"></p>
+      </form>
+    </section>
+
+    <!-- ── Expense table ─────────────────────────────────────────── -->
+    <section class="card">
+      <h2>All Expenses</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Description</th>
+              <th>Category</th>
+              <th style="text-align:right">Amount</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="expense-body">
+            <!-- Rows are injected here by JavaScript -->
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+
+  <script>
+    // ── Colour palette shared between category badges and charts ──
+    // Each category maps to one consistent colour used everywhere
+    const CATEGORY_COLORS = {
+      Food:          "#facc15",
+      Transport:     "#60a5fa",
+      Shopping:      "#f472b6",
+      Bills:         "#f87171",
+      Entertainment: "#a78bfa",
+      Other:         "#94a3b8",
+    };
+
+    // Keep references to the two Chart.js instances so we can update them
+    let barChart  = null;
+    let lineChart = null;
+
+    // ── Initialise date input to today so users don't have to type it ──
+    document.getElementById("date").value = new Date().toISOString().slice(0, 10);
+
+    // ── Fetch all expenses from the server and refresh everything ──
+    // Called on page load and after every add/delete action
+    async function loadExpenses() {
+      const res      = await fetch("/expenses");
+      const expenses = await res.json();
+
+      renderTable(expenses);
+      renderMetrics(expenses);
+      renderBarChart(expenses);
+      renderLineChart(expenses);
+    }
+
+    // ── Build the expense table rows from the expenses array ──────
+    function renderTable(expenses) {
+      const tbody = document.getElementById("expense-body");
+
+      if (expenses.length === 0) {
+        // Show a friendly message when there is nothing to display yet
+        tbody.innerHTML = `<tr><td colspan="5" class="empty-state">No expenses yet — add one above!</td></tr>`;
+        return;
+      }
+
+      // Sort newest first so the most recent expense appears at the top
+      const sorted = [...expenses].sort((a, b) => b.date.localeCompare(a.date));
+
+      tbody.innerHTML = sorted.map(e => `
+        <tr>
+          <td>${formatDate(e.date)}</td>
+          <td>${escapeHtml(e.description)}</td>
+          <td><span class="badge badge-${e.category}">${e.category}</span></td>
+          <td class="col-amount">₹${parseFloat(e.amount).toFixed(2)}</td>
+          <td>
+            <!-- onclick calls deleteExpense with this row's unique ID -->
+            <button class="btn-del" onclick="deleteExpense(${e.id})">Delete</button>
+          </td>
+        </tr>
+      `).join("");
+    }
+
+    // ── Update the three summary cards at the top ─────────────────
+    function renderMetrics(expenses) {
+      // Add up all amounts to get the total
+      const total = expenses.reduce((sum, e) => sum + parseFloat(e.amount), 0);
+      document.getElementById("stat-total").textContent = total.toFixed(2);
+      document.getElementById("stat-count").textContent = expenses.length;
+
+      // Find which category has been spent on the most
+      const byCategory = groupByCategory(expenses);
+      const topCat = Object.entries(byCategory)
+        .sort((a, b) => b[1] - a[1])[0];   // sort descending, take first
+      document.getElementById("stat-top").textContent = topCat ? topCat[0] : "—";
+    }
+
+    // ── Draw (or redraw) the bar chart — one bar per category ─────
+    function renderBarChart(expenses) {
+      const byCategory = groupByCategory(expenses);
+      const labels     = Object.keys(byCategory);
+      const data       = Object.values(byCategory);
+      // Pick the matching colour for each category label
+      const colours    = labels.map(l => CATEGORY_COLORS[l] || "#94a3b8");
+
+      const ctx = document.getElementById("barChart").getContext("2d");
+
+      // Destroy old chart before drawing a new one, otherwise Chart.js warns
+      if (barChart) barChart.destroy();
+
+      barChart = new Chart(ctx, {
+        type: "bar",
+        data: {
+          labels,
+          datasets: [{
+            data,
+            backgroundColor: colours,
+            borderRadius: 6,   // rounded bar tops
+            borderWidth: 0,
+          }]
+        },
+        options: {
+          plugins: { legend: { display: false } },  // no legend — colours are self-explanatory
+          scales: {
+            y: {
+              beginAtZero: true,
+              ticks: { callback: v => "₹" + v }   // prefix every y-axis label with ₹
+            }
+          }
+        }
+      });
+    }
+
+    // ── Draw (or redraw) the line chart — spending per day ────────
+    function renderLineChart(expenses) {
+      // Aggregate total spent for each unique date
+      const byDate = {};
+      expenses.forEach(e => {
+        byDate[e.date] = (byDate[e.date] || 0) + parseFloat(e.amount);
+      });
+
+      // Sort dates chronologically (oldest on the left)
+      const labels = Object.keys(byDate).sort();
+      const data   = labels.map(d => byDate[d]);
+
+      const ctx = document.getElementById("lineChart").getContext("2d");
+
+      if (lineChart) lineChart.destroy();
+
+      lineChart = new Chart(ctx, {
+        type: "line",
+        data: {
+          labels,
+          datasets: [{
+            data,
+            borderColor:     "#6366f1",
+            backgroundColor: "#ede9fe",  // light fill under the line
+            fill:            true,
+            tension:         0.3,        // slight curve — 0 = straight lines
+            pointBackgroundColor: "#6366f1",
+            pointRadius: 4,
+          }]
+        },
+        options: {
+          plugins: { legend: { display: false } },
+          scales: {
+            y: {
+              beginAtZero: true,
+              ticks: { callback: v => "₹" + v }
+            }
+          }
+        }
+      });
+    }
+
+    // ── Submit the add-expense form ───────────────────────────────
+    async function addExpense(event) {
+      event.preventDefault();   // stop the page from reloading on form submit
+
+      const msg = document.getElementById("form-msg");
+
+      // Collect values from each form field
+      const payload = {
+        desc:     document.getElementById("desc").value.trim(),
+        amount:   document.getElementById("amount").value,
+        category: document.getElementById("category").value,
+        date:     document.getElementById("date").value,
+      };
+
+      const res  = await fetch("/add", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        msg.className   = "ok";
+        msg.textContent = "Expense added!";
+        document.getElementById("expense-form").reset();     // clear the form
+        document.getElementById("date").value = new Date().toISOString().slice(0, 10); // reset date to today
+        setTimeout(() => msg.textContent = "", 3000);        // hide message after 3 s
+        loadExpenses();                                      // refresh everything
+      } else {
+        msg.className   = "err";
+        msg.textContent = data.error || "Something went wrong.";
+      }
+    }
+
+    // ── Send a DELETE request for one expense row ─────────────────
+    async function deleteExpense(id) {
+      const res = await fetch(`/delete/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        loadExpenses();   // refresh the table and charts after deletion
+      }
+    }
+
+    // ── Helper: sum amounts grouped by category ───────────────────
+    function groupByCategory(expenses) {
+      const result = {};
+      expenses.forEach(e => {
+        const cat = e.category;
+        result[cat] = (result[cat] || 0) + parseFloat(e.amount);
+      });
+      return result;
+    }
+
+    // ── Helper: format ISO date (YYYY-MM-DD) to a readable string ─
+    function formatDate(iso) {
+      const [y, m, d] = iso.split("-");
+      const months    = ["Jan","Feb","Mar","Apr","May","Jun",
+                         "Jul","Aug","Sep","Oct","Nov","Dec"];
+      return `${d} ${months[parseInt(m, 10) - 1]} ${y}`;
+    }
+
+    // ── Helper: prevent XSS by escaping user-supplied text ────────
+    // This is important — never inject raw user input directly into innerHTML
+    function escapeHtml(text) {
+      return text
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    // ── Load expenses when the page first opens ───────────────────
+    loadExpenses();
+  </script>
+</body>
+</html>
